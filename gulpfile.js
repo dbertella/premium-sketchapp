@@ -1,8 +1,15 @@
-var gulp = require('gulp'),
-  connect = require('gulp-connect'),
-  sass = require('gulp-sass'),
-  react = require('gulp-react'),
-  autoprefixer = require('gulp-autoprefixer');
+var gulp = require('gulp');
+var uglify = require('gulp-uglify');
+var htmlreplace = require('gulp-html-replace');
+var source = require('vinyl-source-stream');
+var browserify = require('browserify');
+var watchify = require('watchify');
+var reactify = require('reactify');
+var streamify = require('gulp-streamify');
+var sass = require('gulp-sass');
+var autoprefixer = require('gulp-autoprefixer');
+var connect = require('gulp-connect');
+
 
 var errorHandler = function(err) {
     var filename = (err.fileName || 'file');
@@ -10,50 +17,78 @@ var errorHandler = function(err) {
 };
 
 var path = {
-  HTML: './app/*.html',
-  ALL: ['./src/js/*.js', './src/js/**/*.js', './src/scss/*.scss', './app/*.html'],
-  JS: ['./src/js/*.js', './src/js/**/*.js'],
+  HTML: 'src/index.html',
   SCSS: './src/scss/*.scss',
-  DEST_CSS: './app/css',
-  DEST_JS: './app/js'
+  MINIFIED_OUT: 'build.min.js',
+  OUT: 'build.js',
+  DEST: 'dist',
+  DEST_BUILD: 'dist/build',
+  DEST_SRC: 'dist/src',
+  DEST_CSS: './dist/css',
+  ENTRY_POINT: './src/js/App.js'
 };
 
+gulp.task('copy', function(){
+  gulp.src(path.HTML)
+    .pipe(gulp.dest(path.DEST));
+});
+gulp.task('sass', function () {
+  gulp.src(path.SCSS)
+    .pipe(sass())
+    .on('error', errorHandler)
+    .pipe(autoprefixer({
+        browsers: ['last 2 versions', 'ie 9'],
+        cascade: false
+    }))
+    .on('error', errorHandler)
+    .pipe(gulp.dest('./app/css'));
+});
 gulp.task('connect', function() {
   connect.server({
-    root: './app',
+    root: './dist',
     livereload: true
   });
 });
- 
-gulp.task('html', function () {
+gulp.task('watch', function() {
+  gulp.watch([path.HTML, path.SCSS], ['copy', 'sass']);
+
+  var watcher  = watchify(browserify({
+    entries: [path.ENTRY_POINT],
+    transform: [reactify],
+    debug: true,
+    cache: {}, packageCache: {}, fullPaths: true
+  }));
+
+  return watcher.on('update', function () {
+    watcher.bundle()
+      .pipe(source(path.OUT))
+      .pipe(gulp.dest(path.DEST_SRC))
+      console.log('Updated');
+  })
+    .bundle()
+    .pipe(source(path.OUT))
+    .pipe(gulp.dest(path.DEST_SRC));
+});
+
+gulp.task('build', function(){
+  browserify({
+    entries: [path.ENTRY_POINT],
+    transform: [reactify],
+  })
+    .bundle()
+    .pipe(source(path.MINIFIED_OUT))
+    .pipe(streamify(uglify(path.MINIFIED_OUT)))
+    .pipe(gulp.dest(path.DEST_BUILD));
+});
+
+gulp.task('replaceHTML', function(){
   gulp.src(path.HTML)
-    .pipe(connect.reload());
+    .pipe(htmlreplace({
+      'js': 'build/' + path.MINIFIED_OUT
+    }))
+    .pipe(gulp.dest(path.DEST));
 });
 
-gulp.task('sass', function () {
-    gulp.src(path.SCSS)
-        .pipe(sass())
-        .on('error', errorHandler)
-        .pipe(autoprefixer({
-            browsers: ['last 2 versions', 'ie 9'],
-            cascade: false
-        }))
-        .on('error', errorHandler)
-        .pipe(gulp.dest('./app/css'));
-});
+gulp.task('production', ['replaceHTML', 'build']);
 
-gulp.task('transform', function(){
-  gulp.src(path.JS)
-    .pipe(react())
-    .on('error', errorHandler)
-    .pipe(gulp.dest(path.DEST_JS));
-});
-
-gulp.task('watch', function () {
-  // gulp.watch(['./app/*.html'], ['html']);
-  // gulp.watch('./scss/*.scss', ['sass']);
-  gulp.watch(path.ALL, ['html', 'sass', 'transform'])
-
-});
- 
 gulp.task('default', ['connect', 'watch']);
