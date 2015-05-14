@@ -1,0 +1,72 @@
+$darkgrey: #333;
+$lightgrey: #777;
+$purple: rgba(108,33,79, 1);
+
+*, *:before, *:after {
+  box-sizing: border-box;
+}
+
+.card {
+  position: relative;
+	margin: 35px auto;
+	padding: 15px;
+	max-width: 98%;
+	background: #fff;
+	box-shadow: 0px 1px 3px rgba(0, 0, 0, 0.35);
+	border-radius: 3px;
+}
+
+input,
+textarea,
+button {
+  display: block;
+  position: relative;
+  overflow: visible;
+  width: 100%;
+  
+  font-size:18px;
+  padding:10px;
+  background: #fff;
+  border: none;
+  border-radius: 2px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.25);  
+  &:focus { outline:none; }
+}
+
+
+
+input {
+  height: 50px;
+  &.ng-invalid.ng-touched {
+    box-shadow: 0 2px 5px 5px rgba(red, 0.25);  
+  }
+}
+
+button {
+  height: 50px;
+  color: #fff;
+  background: $darkgrey;
+  text-transform: uppercase;
+  &:hover {
+     background: $purple;
+     color: #fff;
+  }
+}
+
+.group { 
+  position: relative; 
+  padding: 15px;
+  & + & {
+    margin-top: 35px;
+  }
+}
+
+label {
+  font-size: 18px;
+  font-weight: normal;
+  color: #999; 
+  font-size: 14px;
+  color: $lightgrey;
+  pointer-events: none;  
+
+}

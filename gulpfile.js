@@ -1,94 +1,90 @@
-var gulp = require('gulp');
-var uglify = require('gulp-uglify');
-var htmlreplace = require('gulp-html-replace');
-var source = require('vinyl-source-stream');
-var browserify = require('browserify');
-var watchify = require('watchify');
-var reactify = require('reactify');
-var streamify = require('gulp-streamify');
-var sass = require('gulp-sass');
-var autoprefixer = require('gulp-autoprefixer');
-var connect = require('gulp-connect');
+'use strict';
 
+var gulp = require('gulp'),
+    changed = require('gulp-changed'),
+    sass = require('gulp-sass'),
+    csso = require('gulp-csso'),
+    autoprefixer = require('gulp-autoprefixer'),
+    browserify = require('browserify'),
+    watchify = require('watchify'),
+    source = require('vinyl-source-stream'),
+    buffer = require('vinyl-buffer'),
+    babelify = require('babelify'),
+    uglify = require('gulp-uglify'),
+    del = require('del'),
+    notify = require('gulp-notify'),
+    browserSync = require('browser-sync'),
+    sourcemaps = require('gulp-sourcemaps'),
+    reload = browserSync.reload,
+    p = {
+      jsx: './scripts/app.jsx',
+      scss: 'styles/main.scss',
+      bundle: 'app.js',
+      distJs: 'dist/js',
+      distCss: 'dist/css'
+    };
 
-var errorHandler = function(err) {
-    var filename = (err.fileName || 'file');
-    console.log('[ \x1b[31m!ERROR\x1b[0m ] ' + (!!err.plugin ? 'Plugin ' + err.plugin : 'Main task') + ': \x1b[35m' + filename + '\x1b[0m \x1b[31m' + err.message + '\x1b[0m' + (!!err.lineNumber ? ' At line: ' + err.lineNumber : '0') );
-};
-
-var path = {
-  HTML: 'src/index.html',
-  SCSS: './src/scss/*.scss',
-  MINIFIED_OUT: 'build.min.js',
-  OUT: 'build.js',
-  DEST: 'dist',
-  DEST_BUILD: 'dist/build',
-  DEST_SRC: 'dist/src',
-  DEST_CSS: './dist/css',
-  ENTRY_POINT: './src/js/App.js'
-};
-
-gulp.task('copy', function(){
-  gulp.src(path.HTML)
-    .pipe(gulp.dest(path.DEST));
+gulp.task('clean', function(cb) {
+  del(['dist'], cb);
 });
-gulp.task('sass', function () {
-  gulp.src(path.SCSS)
-    .pipe(sass())
-    .on('error', errorHandler)
-    .pipe(autoprefixer({
-        browsers: ['last 2 versions', 'ie 9'],
-        cascade: false
-    }))
-    .on('error', errorHandler)
-    .pipe(gulp.dest('./app/css'));
-});
-gulp.task('connect', function() {
-  connect.server({
-    root: './dist',
-    livereload: true
+
+gulp.task('browserSync', function() {
+  browserSync({
+    server: {
+      baseDir: './'
+    }
   });
 });
-gulp.task('watch', function() {
-  gulp.watch([path.HTML, path.SCSS], ['copy', 'sass']);
 
-  var watcher  = watchify(browserify({
-    entries: [path.ENTRY_POINT],
-    transform: [reactify],
-    debug: true,
-    cache: {}, packageCache: {}, fullPaths: true
-  }));
+gulp.task('watchify', function() {
+  var bundler = watchify(browserify(p.jsx, watchify.args));
 
-  return watcher.on('update', function () {
-    watcher.bundle()
-      .pipe(source(path.OUT))
-      .pipe(gulp.dest(path.DEST_SRC))
-      console.log('Updated');
-  })
+  function rebundle() {
+    return bundler
+      .bundle()
+      .on('error', notify.onError())
+      .pipe(source(p.bundle))
+      .pipe(gulp.dest(p.distJs))
+      .pipe(reload({stream: true}));
+  }
+
+  bundler.transform(babelify)
+  .on('update', rebundle);
+  return rebundle();
+});
+
+gulp.task('browserify', function() {
+  browserify(p.jsx)
+    .transform(babelify)
     .bundle()
-    .pipe(source(path.OUT))
-    .pipe(gulp.dest(path.DEST_SRC));
+    .pipe(source(p.bundle))
+    .pipe(buffer())
+    .pipe(sourcemaps.init({loadMaps: true}))
+    .pipe(uglify())
+    .pipe(sourcemaps.write('./'))
+    .pipe(gulp.dest(p.distJs));
 });
 
-gulp.task('build', function(){
-  browserify({
-    entries: [path.ENTRY_POINT],
-    transform: [reactify],
-  })
-    .bundle()
-    .pipe(source(path.MINIFIED_OUT))
-    .pipe(streamify(uglify(path.MINIFIED_OUT)))
-    .pipe(gulp.dest(path.DEST_BUILD));
+gulp.task('styles', function() {
+  return gulp.src(p.scss)
+    .pipe(changed(p.distCss))
+    .pipe(sass({errLogToConsole: true}))
+    .on('error', notify.onError())
+    .pipe(autoprefixer('last 1 version'))
+    .pipe(csso())
+    .pipe(gulp.dest(p.distCss))
+    .pipe(reload({stream: true}));
 });
 
-gulp.task('replaceHTML', function(){
-  gulp.src(path.HTML)
-    .pipe(htmlreplace({
-      'js': 'build/' + path.MINIFIED_OUT
-    }))
-    .pipe(gulp.dest(path.DEST));
+gulp.task('watchTask', function() {
+  gulp.watch(p.scss, ['styles']);
 });
 
-gulp.task('production', ['replaceHTML', 'build']);
+gulp.task('default', ['clean'], function() {
+  gulp.start(['browserSync', 'watchTask', 'watchify', 'styles']);
+});
 
-gulp.task('default', ['connect', 'watch']);
+gulp.task('build', ['clean'], function() {
+  process.env.NODE_ENV = 'production';
+  gulp.start(['browserify', 'styles']);
+});
